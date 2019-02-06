@@ -17,7 +17,7 @@ class App extends Component<Props> {
 		const { listenBroadcast } = this.state;
 
 		if(listenBroadcast){
-			this.props.navigation.navigate('Broadcast', { roomID: listenBroadcast });
+			this.props.navigation.navigate('Broadcast', { roomID: listenBroadcast, broadcaster: false });
 		}else{
 			alert('Please enter a valid code!');
 		}
@@ -27,7 +27,7 @@ class App extends Component<Props> {
 		const { startBroadcast } = this.state;
 
 		if(startBroadcast){
-			this.props.navigation.navigate('Broadcast', { roomID: startBroadcast });
+			this.props.navigation.navigate('Broadcast', { roomID: startBroadcast, broadcaster: true });
 		}else{
 			alert('Please enter a valid code');
 		}
