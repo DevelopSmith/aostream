@@ -312,27 +312,7 @@ export default class Broadcast extends Component<Props> {
             <View style={styles.container}>
                 <Text style={styles.welcome}>Broadcast Code: {this.state.roomID}</Text>
 
-                {/* <Text style={styles.welcome}>{this.state.info}</Text>
-
-                {this.state.textRoomConnected && this._renderTextRoom()}
-
-                <View style={{ flexDirection: 'row' }}>
-                    <Text>
-                        {this.state.isFront ? "Use front camera" : "Use back camera"}
-                    </Text>
-                    <TouchableHighlight
-                        style={{ borderWidth: 1, borderColor: 'black' }}
-                        onPress={this._switchVideoType}>
-                        <Text>Switch camera</Text>
-                    </TouchableHighlight>
-                </View> */}
-
-                <RTCView streamURL={this.state.selfViewSrc} style={styles.selfView} />
-                {
-                    mapHash(this.state.remoteList, function (remote, index) {
-                        return <RTCView key={index} streamURL={remote} style={styles.remoteView} />
-                    })/*  */
-                }
+                <RTCView streamURL={this.state.videoURL} />
             </View>
         );
     }

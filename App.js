@@ -19,7 +19,7 @@ class App extends Component<Props> {
 		if(listenBroadcast){
 			this.props.navigation.navigate('Broadcast', { roomID: listenBroadcast });
 		}else{
-			alert('Please enter a code!');
+			alert('Please enter a valid code!');
 		}
 	}
 
@@ -29,7 +29,7 @@ class App extends Component<Props> {
 		if(startBroadcast){
 			this.props.navigation.navigate('Broadcast', { roomID: startBroadcast });
 		}else{
-			alert('Please enter a code!');
+			alert('Please enter a valid code');
 		}
 	}
 
