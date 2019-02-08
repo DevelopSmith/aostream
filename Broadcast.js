@@ -5,7 +5,7 @@ import io from 'socket.io-client';
 import { RTCPeerConnection, RTCMediaStream, RTCIceCandidate, RTCSessionDescription, RTCView, MediaStreamTrack, mediaDevices, getUserMedia } from 'react-native-webrtc';
 
 import Sound from 'react-native-sound';
-import {AudioRecorder, AudioUtils} from 'react-native-audio';
+import { AudioRecorder, AudioUtils } from 'react-native-audio';
 
 const socket = io.connect('https://react-native-webrtc.herokuapp.com', { transports: ['websocket'] });
 const configuration = { "iceServers": [{ "url": "stun:stun.l.google.com:19302" }] };
@@ -13,6 +13,7 @@ const configuration = { "iceServers": [{ "url": "stun:stun.l.google.com:19302" }
 const pcPeers = {};
 let localStream;
 let isBroadcaster = true;
+let thePC = null;
 
 function getLocalStream(isFront, callback) {
     let videoSourceId;
@@ -33,10 +34,11 @@ function getLocalStream(isFront, callback) {
     } */
 
     getUserMedia({
-        audio: isBroadcaster,
-        video: true
+        audio: true,
+        video: false
     }).then(stream => {
         console.log('getUserMedia success', stream);
+
         callback(stream);
     }).then(logError);
 }
@@ -83,9 +85,9 @@ function createPC(socketId, isOffer) {
     pc.oniceconnectionstatechange = function (event) {
         console.log('oniceconnectionstatechange', event.target.iceConnectionState);
         if (event.target.iceConnectionState === 'completed') {
-            setTimeout(() => {
+            /* setTimeout(() => {
                 getStats();
-            }, 1000);
+            }, 1000); */
         }
         if (event.target.iceConnectionState === 'connected') {
             createDataChannel();
@@ -107,8 +109,12 @@ function createPC(socketId, isOffer) {
         console.log('onremovestream', event.stream);
     };
 
-    console.log(localStream);
+    if(!isBroadcaster){
+        localStream.getAudioTracks()[0].enabled = false;
+    }
+
     pc.addStream(localStream);
+
     function createDataChannel() {
         if (pc.textDataChannel) {
             return;
@@ -135,6 +141,11 @@ function createPC(socketId, isOffer) {
 
         pc.textDataChannel = dataChannel;
     }
+
+    console.log(pc);
+    console.log(localStream);
+    thePC = pc;
+
     return pc;
 }
 
@@ -165,9 +176,17 @@ function exchange(data) {
     }
 }
 
-function leave(socketId) {
+function mute(socketId) {
     console.log('leave', socketId);
     const pc = pcPeers[socketId];
+    pc.mute();
+}
+
+function leave(socketId) {
+    console.log('leave', socketId);
+    thePC.close();
+
+    /* const pc = pcPeers[socketId];
     const viewIndex = pc.viewIndex;
     pc.close();
     delete pcPeers[socketId];
@@ -175,7 +194,7 @@ function leave(socketId) {
     const remoteList = container.state.remoteList;
     delete remoteList[socketId]
     container.setState({ remoteList: remoteList });
-    container.setState({ info: 'One peer leave!' });
+    container.setState({ info: 'One peer leave!' }); */
 }
 
 socket.on('exchange', function (data) {
@@ -187,6 +206,7 @@ socket.on('leave', function (socketId) {
 
 socket.on('connect', function (data) {
     console.log('connect');
+
     getLocalStream(true, function (stream) {
         console.log(stream);
         localStream = stream;
@@ -197,15 +217,6 @@ socket.on('connect', function (data) {
 
 function logError(error) {
     console.log("logError", error);
-}
-
-function mapHash(hash, func) {
-    const array = [];
-    for (const key in hash) {
-        const obj = hash[key];
-        array.push(func(obj, key));
-    }
-    return array;
 }
 
 function getStats() {
@@ -223,10 +234,10 @@ let container;
 
 type Props = {};
 export default class Broadcast extends Component<Props> {
-	constructor() {
-		super();
+    constructor() {
+        super();
         // this.ds = new ListView.DataSource({ rowHasChanged: (r1, r2) => true });
-        
+
         this.state = {
             info: 'Initializing',
             status: 'init',
@@ -248,7 +259,7 @@ export default class Broadcast extends Component<Props> {
         };
     }
 
-    prepareRecordingPath(audioPath){
+    prepareRecordingPath(audioPath) {
         AudioRecorder.prepareRecordingAtPath(audioPath, {
             SampleRate: 22050,
             Channels: 1,
@@ -261,36 +272,37 @@ export default class Broadcast extends Component<Props> {
     start = () => {
         AudioRecorder.requestAuthorization().then((isAuthorised) => {
             this.setState({ hasPermission: isAuthorised });
-    
+
             if (!isAuthorised) return;
-    
+
             this.prepareRecordingPath(this.state.audioPath);
-    
+
             AudioRecorder.onProgress = (data) => {
-              this.setState({currentTime: Math.floor(data.currentTime)});
+                this.setState({ currentTime: Math.floor(data.currentTime) });
             };
-    
+
             AudioRecorder.onFinished = (data) => {
-              // Android callback comes in the form of a promise instead.
-              if (Platform.OS === 'ios') {
-                this._finishRecording(data.status === "OK", data.audioFileURL, data.audioFileSize);
-              }
+                // Android callback comes in the form of a promise instead.
+                if (Platform.OS === 'ios') {
+                    this._finishRecording(data.status === "OK", data.audioFileURL, data.audioFileSize);
+                }
             };
-          });    
+        });
     }
-  
+
     componentDidMount() {
+        this.props.navigation.setParams({ name: 'Broadcasting' })
         container = this;
         const roomID = this.props.navigation.getParam('roomID', null);
         isBroadcaster = this.props.navigation.getParam('broadcaster', true);
 
-        if(roomID){
+        if (roomID) {
             this.setState({ status: 'connect', info: 'Connecting', roomID: roomID });
             join(roomID);
             this.start();
         }
     }
- 
+
     receiveTextData = (data) => {
         const textRoomData = this.state.textRoomData.slice();
         textRoomData.push(data);
@@ -353,143 +365,147 @@ export default class Broadcast extends Component<Props> {
 
     _renderButton(title, onPress, active) {
         var style = (active) ? styles.activeButtonText : styles.buttonText;
-  
+
         return (
-          <TouchableHighlight style={styles.button} onPress={onPress}>
-            <Text style={style}>
-              {title}
-            </Text>
-          </TouchableHighlight>
+            <TouchableHighlight style={styles.button} onPress={onPress}>
+                <Text style={style}>{title}</Text>
+            </TouchableHighlight>
         );
-      }
-  
-      _renderPauseButton(onPress, active) {
+    }
+
+    _renderPauseButton(onPress, active) {
         var style = (active) ? styles.activeButtonText : styles.buttonText;
         var title = this.state.paused ? "RESUME" : "PAUSE";
         return (
-          <TouchableHighlight style={styles.button} onPress={onPress}>
-            <Text style={style}>
-              {title}
-            </Text>
-          </TouchableHighlight>
+            <TouchableHighlight style={styles.button} onPress={onPress}>
+                <Text style={style}>
+                    {title}
+                </Text>
+            </TouchableHighlight>
         );
-      }
-  
-      async _pause() {
+    }
+
+    async _pause() {
         if (!this.state.recording) {
-          console.log('Can\'t pause, not recording!');
-          return;
+            console.log('Can\'t pause, not recording!');
+            return;
         }
-  
+
         try {
-          const filePath = await AudioRecorder.pauseRecording();
-          this.setState({paused: true});
+            const filePath = await AudioRecorder.pauseRecording();
+            this.setState({ paused: true });
         } catch (error) {
-          console.error(error);
+            console.error(error);
         }
-      }
-  
-      async _resume() {
+    }
+
+    async _resume() {
         if (!this.state.paused) {
-          console.log('Can\'t resume, not paused!');
-          return;
+            console.log('Can\'t resume, not paused!');
+            return;
         }
-  
+
         try {
-          await AudioRecorder.resumeRecording();
-          this.setState({paused: false});
+            await AudioRecorder.resumeRecording();
+            this.setState({ paused: false });
         } catch (error) {
-          console.error(error);
+            console.error(error);
         }
-      }
-  
-      async _stop() {
+    }
+
+    async _stop() {
         if (!this.state.recording) {
-          console.log('Can\'t stop, not recording!');
-          return;
+            console.log('Can\'t stop, not recording!');
+            return;
         }
-  
-        this.setState({stoppedRecording: true, recording: false, paused: false});
-  
+
+        this.setState({ stoppedRecording: true, recording: false, paused: false });
+
         try {
-          const filePath = await AudioRecorder.stopRecording();
-  
-          if (Platform.OS === 'android') {
-            this._finishRecording(true, filePath);
-          }
-          return filePath;
+            const filePath = await AudioRecorder.stopRecording();
+
+            if (Platform.OS === 'android') {
+                this._finishRecording(true, filePath);
+            }
+            return filePath;
         } catch (error) {
-          console.error(error);
+            console.error(error);
         }
-      }
-  
-      async _play() {
+    }
+
+    async _play() {
         if (this.state.recording) {
-          await this._stop();
+            await this._stop();
         }
-  
+
         // These timeouts are a hacky workaround for some issues with react-native-sound.
         // See https://github.com/zmxv/react-native-sound/issues/89.
         setTimeout(() => {
-          var sound = new Sound(this.state.audioPath, '', (error) => {
-            if (error) {
-              console.log('failed to load the sound', error);
-            }
-          });
-  
-          setTimeout(() => {
-            sound.play((success) => {
-              if (success) {
-                console.log('successfully finished playing');
-              } else {
-                console.log('playback failed due to audio decoding errors');
-              }
+            var sound = new Sound(this.state.audioPath, '', (error) => {
+                if (error) {
+                    console.log('failed to load the sound', error);
+                }
             });
-          }, 100);
+
+            setTimeout(() => {
+                sound.play((success) => {
+                    if (success) {
+                        console.log('successfully finished playing');
+                    } else {
+                        console.log('playback failed due to audio decoding errors');
+                    }
+                });
+            }, 100);
         }, 100);
-      }
-  
-      async _record() {
+    }
+
+    async _record() {
         if (this.state.recording) {
-          console.log('Already recording!');
-          return;
+            console.log('Already recording!');
+            return;
         }
-  
+
         if (!this.state.hasPermission) {
-          console.log('Can not record, no permission granted!');
-          return;
+            console.log('Can not record, no permission granted!');
+            return;
         }
-  
-        if(this.state.stoppedRecording){
-          this.prepareRecordingPath(this.state.audioPath);
+
+        if (this.state.stoppedRecording) {
+            this.prepareRecordingPath(this.state.audioPath);
         }
-  
-        this.setState({recording: true, paused: false});
-  
+
+        this.setState({ recording: true, paused: false });
+
         try {
-          const filePath = await AudioRecorder.startRecording();
+            AudioRecorder.startRecording();
         } catch (error) {
-          console.error(error);
+            console.log(error);
         }
-      }
-  
-      _finishRecording(didSucceed, filePath, fileSize) {
+    }
+
+    _finishRecording(didSucceed, filePath, fileSize) {
         this.setState({ finished: didSucceed });
         console.log(`Finished recording of duration ${this.state.currentTime} seconds at path: ${filePath} and size of ${fileSize || 0} bytes`);
-      }
-  
+    }
+
+    _leave = () => {
+        leave();
+        this.props.navigation.goBack()
+    }
 
     render() {
         return (
             <View style={styles.container}>
-                <Text style={styles.welcome}>{ isBroadcaster ? 'Broadcasting on' : 'Listening to'}: {this.state.roomID}</Text>
+                <Text style={styles.welcome}>{isBroadcaster ? 'Broadcasting on' : 'Listening to'}: {this.state.roomID}</Text>
 
                 <View style={styles.controls}>
-                    {this._renderButton("RECORD", () => {this._record()}, this.state.recording )}
-                    {this._renderButton("PLAY", () => {this._play()} )}
-                    {this._renderButton("STOP", () => {this._stop()} )}
+                    {thePC ? this._renderButton("LEAVE", () => { this._leave() }) : null}
+
+                    {this._renderButton("RECORD", () => { this._record() }, this.state.recording)}
+                    {this._renderButton("PLAY", () => { this._play() })}
+                    {this._renderButton("STOP", () => { this._stop() })}
                     {/* {this._renderButton("PAUSE", () => {this._pause()} )} */}
-                    {this._renderPauseButton(() => {this.state.paused ? this._resume() : this._pause()})}
+                    {this._renderPauseButton(() => { this.state.paused ? this._resume() : this._pause() })}
                     <Text style={styles.progressText}>{this.state.currentTime}s</Text>
                 </View>
 

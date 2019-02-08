@@ -6,6 +6,17 @@ import Broadcast from './Broadcast';
 
 type Props = {};
 class App extends Component<Props> {
+	static navigationOptions = ({ navigation }) => {
+		const params = navigation.state.params;
+		return {
+			title: params ? params.title : `Broadcasting`,
+			headerTitleStyle : {textAlign: 'center', alignSelf:'center', color: '#000'},
+			headerStyle:{
+				backgroundColor:'white',
+			},
+		};
+	};
+
 	state = {
 		startBroadcast: '',
 		listenBroadcast: '',
@@ -17,7 +28,7 @@ class App extends Component<Props> {
 		const { listenBroadcast } = this.state;
 
 		if(listenBroadcast){
-			this.props.navigation.navigate('Broadcast', { roomID: listenBroadcast, broadcaster: false });
+			this.props.navigation.navigate('Broadcast', { roomID: listenBroadcast, broadcaster: false, title: 'Broadcasting' });
 		}else{
 			alert('Please enter a valid code!');
 		}
@@ -27,7 +38,7 @@ class App extends Component<Props> {
 		const { startBroadcast } = this.state;
 
 		if(startBroadcast){
-			this.props.navigation.navigate('Broadcast', { roomID: startBroadcast, broadcaster: true });
+			this.props.navigation.navigate('Broadcast', { roomID: startBroadcast, broadcaster: true, title: 'Listening to Broadcast' });
 		}else{
 			alert('Please enter a valid code');
 		}
