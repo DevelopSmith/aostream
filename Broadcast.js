@@ -249,6 +249,7 @@ export default class Broadcast extends Component<Props> {
             textRoomData: [],
             textRoomValue: '',
 
+            doneFirstRec: false,
             currentTime: 0.0,
             recording: false,
             paused: false,
@@ -276,6 +277,11 @@ export default class Broadcast extends Component<Props> {
             if (!isAuthorised) return;
 
             this.prepareRecordingPath(this.state.audioPath);
+
+            this._record();
+            setTimeout(() => {
+                this._stop();
+            }, 5000);
 
             AudioRecorder.onProgress = (data) => {
                 this.setState({ currentTime: Math.floor(data.currentTime) });
@@ -424,9 +430,14 @@ export default class Broadcast extends Component<Props> {
         try {
             const filePath = await AudioRecorder.stopRecording();
 
-            if (Platform.OS === 'android') {
+            if(Platform.OS === 'android'){
                 this._finishRecording(true, filePath);
             }
+
+            if(!this.state.doneFirstRec){
+                this.setState({ currentTime: 0, doneFirstRec: true });
+            }
+
             return filePath;
         } catch (error) {
             console.error(error);
@@ -477,9 +488,9 @@ export default class Broadcast extends Component<Props> {
         this.setState({ recording: true, paused: false });
 
         try {
-            AudioRecorder.startRecording();
+            const filePath = await AudioRecorder.startRecording();
         } catch (error) {
-            console.log(error);
+            console.error(error);
         }
     }
 
@@ -493,21 +504,25 @@ export default class Broadcast extends Component<Props> {
         this.props.navigation.goBack()
     }
 
+    renderControls = () => {
+        return (<View style={styles.controls}>
+            {thePC ? this._renderButton("LEAVE", () => { this._leave() }) : null}
+
+            {this._renderButton("RECORD", () => { this._record() }, this.state.recording)}
+            {this._renderButton("PLAY", () => { this._play() })}
+            {this._renderButton("STOP", () => { this._stop() })}
+            {/* {this._renderButton("PAUSE", () => {this._pause()} )} */}
+            {this._renderPauseButton(() => { this.state.paused ? this._resume() : this._pause() })}
+            <Text style={styles.progressText}>{this.state.currentTime}s</Text>
+        </View>);
+    }
+
     render() {
         return (
             <View style={styles.container}>
                 <Text style={styles.welcome}>{isBroadcaster ? 'Broadcasting on' : 'Listening to'}: {this.state.roomID}</Text>
 
-                <View style={styles.controls}>
-                    {thePC ? this._renderButton("LEAVE", () => { this._leave() }) : null}
-
-                    {this._renderButton("RECORD", () => { this._record() }, this.state.recording)}
-                    {this._renderButton("PLAY", () => { this._play() })}
-                    {this._renderButton("STOP", () => { this._stop() })}
-                    {/* {this._renderButton("PAUSE", () => {this._pause()} )} */}
-                    {this._renderPauseButton(() => { this.state.paused ? this._resume() : this._pause() })}
-                    <Text style={styles.progressText}>{this.state.currentTime}s</Text>
-                </View>
+                {!isBroadcaster && this.state.doneFirstRec ? this.renderControls() : null}
 
                 <RTCView streamURL={this.state.videoURL} />
             </View>
