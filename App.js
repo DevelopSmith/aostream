@@ -99,6 +99,7 @@ const styles = StyleSheet.create({
 		marginTop: 20,
 		marginBottom: 20,
 		paddingLeft: 10,
+		height: 38,
 	},
 	button: {
 		color: grayish,

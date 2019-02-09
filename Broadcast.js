@@ -257,66 +257,6 @@ export default class Broadcast extends Component<Props> {
         join(roomID);
     }
 
-    /* receiveTextData = (data) => {
-        const textRoomData = this.state.textRoomData.slice();
-        textRoomData.push(data);
-        this.setState({ textRoomData, textRoomValue: '' });
-    }
-
-    _switchVideoType = () => {
-        const isFront = !this.state.isFront;
-        this.setState({ isFront });
-        getLocalStream(isFront, function (stream) {
-            if (localStream) {
-                for (const id in pcPeers) {
-                    const pc = pcPeers[id];
-                    pc && pc.removeStream(localStream);
-                }
-                localStream.release();
-            }
-            localStream = stream;
-            container.setState({ selfViewSrc: stream.toURL() });
-
-            for (const id in pcPeers) {
-                const pc = pcPeers[id];
-                pc && pc.addStream(localStream);
-            }
-        });
-    }
-
-    _textRoomPress = () => {
-        if (!this.state.textRoomValue) {
-            return
-        }
-        const textRoomData = this.state.textRoomData.slice();
-        textRoomData.push({ user: 'Me', message: this.state.textRoomValue });
-        for (const key in pcPeers) {
-            const pc = pcPeers[key];
-            pc.textDataChannel.send(this.state.textRoomValue);
-        }
-        this.setState({ textRoomData, textRoomValue: '' });
-    }
-
-    _renderTextRoom = () => {
-        return (
-            <View style={styles.listViewContainer}>
-                <ListView
-                    dataSource={// .cloneWithRows(this.state.textRoomData)}
-                    renderRow={rowData => <Text>{`${rowData.user}: ${rowData.message}`}</Text>}
-                />
-                <TextInput
-                    style={{ width: 200, height: 30, borderColor: 'gray', borderWidth: 1 }}
-                    onChangeText={value => this.setState({ textRoomValue: value })}
-                    value={this.state.textRoomValue}
-                />
-                <TouchableHighlight
-                    onPress={this._textRoomPress}>
-                    <Text>Send</Text>
-                </TouchableHighlight>
-            </View>
-        );
-    } */
-
     _leave = () => {
         socket.disconnect()
         this.props.navigation.goBack()
