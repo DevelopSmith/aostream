@@ -17,7 +17,7 @@ function getLocalStream(isFront, callback) {
 
     // on android, you don't have to specify sourceId manually, just use facingMode
     // uncomment it if you want to specify
-    /* if (Platform.OS === 'ios') {
+    /* if(Platform.OS === 'ios') {
         MediaStreamTrack.getSources(sourceInfos => {
             console.log("sourceInfos: ", sourceInfos);
 
