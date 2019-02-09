@@ -4,10 +4,7 @@ import { StyleSheet, Text, TouchableHighlight, View, Platform } from 'react-nati
 import io from 'socket.io-client';
 import { RTCPeerConnection, RTCMediaStream, RTCIceCandidate, RTCSessionDescription, RTCView, MediaStreamTrack, mediaDevices, getUserMedia } from 'react-native-webrtc';
 
-import Sound from 'react-native-sound';
-import { AudioRecorder, AudioUtils } from 'react-native-audio';
-
-const socket = io.connect('https://react-native-webrtc.herokuapp.com', { transports: ['websocket'] });
+let socket;
 const configuration = { "iceServers": [{ "url": "stun:stun.l.google.com:19302" }] };
 
 const pcPeers = {};
@@ -184,7 +181,6 @@ function mute(socketId) {
 
 function leave(socketId) {
     console.log('leave', socketId);
-    thePC.close();
 
     /* const pc = pcPeers[socketId];
     const viewIndex = pc.viewIndex;
@@ -196,24 +192,6 @@ function leave(socketId) {
     container.setState({ remoteList: remoteList });
     container.setState({ info: 'One peer leave!' }); */
 }
-
-socket.on('exchange', function (data) {
-    exchange(data);
-});
-socket.on('leave', function (socketId) {
-    leave(socketId);
-});
-
-socket.on('connect', function (data) {
-    console.log('connect');
-
-    getLocalStream(true, function (stream) {
-        console.log(stream);
-        localStream = stream;
-        container.setState({ selfViewSrc: stream.toURL() });
-        container.setState({ status: 'ready', info: 'Please enter or create room ID' });
-    });
-});
 
 function logError(error) {
     console.log("logError", error);
@@ -246,54 +224,7 @@ export default class Broadcast extends Component<Props> {
             selfViewSrc: null,
             remoteList: {},
             textRoomConnected: false,
-            textRoomData: [],
-            textRoomValue: '',
-
-            doneFirstRec: false,
-            currentTime: 0.0,
-            recording: false,
-            paused: false,
-            stoppedRecording: false,
-            finished: false,
-            audioPath: AudioUtils.DocumentDirectoryPath + '/test.aac',
-            hasPermission: undefined,
         };
-    }
-
-    prepareRecordingPath(audioPath) {
-        AudioRecorder.prepareRecordingAtPath(audioPath, {
-            SampleRate: 22050,
-            Channels: 1,
-            AudioQuality: "Low",
-            AudioEncoding: "aac",
-            AudioEncodingBitRate: 32000
-        });
-    }
-
-    start = () => {
-        AudioRecorder.requestAuthorization().then((isAuthorised) => {
-            this.setState({ hasPermission: isAuthorised });
-
-            if (!isAuthorised) return;
-
-            this.prepareRecordingPath(this.state.audioPath);
-
-            this._record();
-            setTimeout(() => {
-                this._stop();
-            }, 5000);
-
-            AudioRecorder.onProgress = (data) => {
-                this.setState({ currentTime: Math.floor(data.currentTime) });
-            };
-
-            AudioRecorder.onFinished = (data) => {
-                // Android callback comes in the form of a promise instead.
-                if (Platform.OS === 'ios') {
-                    this._finishRecording(data.status === "OK", data.audioFileURL, data.audioFileSize);
-                }
-            };
-        });
     }
 
     componentDidMount() {
@@ -302,20 +233,37 @@ export default class Broadcast extends Component<Props> {
         const roomID = this.props.navigation.getParam('roomID', null);
         isBroadcaster = this.props.navigation.getParam('broadcaster', true);
 
-        if (roomID) {
-            this.setState({ status: 'connect', info: 'Connecting', roomID: roomID });
-            join(roomID);
-            this.start();
-        }
+        socket = io.connect('https://aostream-webrtc-server.herokuapp.com', { transports: ['websocket'] });
+
+        socket.on('exchange', function (data) {
+            exchange(data);
+        });
+        socket.on('leave', function (socketId) {
+            leave(socketId);
+        });
+        
+        socket.on('connect', function (data) {
+            console.log('connect');
+        
+            getLocalStream(true, function (stream) {
+                console.log(stream);
+                localStream = stream;
+                container.setState({ selfViewSrc: stream.toURL() });
+                container.setState({ status: 'ready', info: 'Please enter or create room ID' });
+            });
+        });
+
+        this.setState({ status: 'connect', info: 'Connecting', roomID: roomID });
+        join(roomID);
     }
 
-    receiveTextData = (data) => {
+    /* receiveTextData = (data) => {
         const textRoomData = this.state.textRoomData.slice();
         textRoomData.push(data);
         this.setState({ textRoomData, textRoomValue: '' });
     }
 
-    /* _switchVideoType = () => {
+    _switchVideoType = () => {
         const isFront = !this.state.isFront;
         this.setState({ isFront });
         getLocalStream(isFront, function (stream) {
@@ -369,152 +317,9 @@ export default class Broadcast extends Component<Props> {
         );
     } */
 
-    _renderButton(title, onPress, active) {
-        var style = (active) ? styles.activeButtonText : styles.buttonText;
-
-        return (
-            <TouchableHighlight style={styles.button} onPress={onPress}>
-                <Text style={style}>{title}</Text>
-            </TouchableHighlight>
-        );
-    }
-
-    _renderPauseButton(onPress, active) {
-        var style = (active) ? styles.activeButtonText : styles.buttonText;
-        var title = this.state.paused ? "RESUME" : "PAUSE";
-        return (
-            <TouchableHighlight style={styles.button} onPress={onPress}>
-                <Text style={style}>
-                    {title}
-                </Text>
-            </TouchableHighlight>
-        );
-    }
-
-    async _pause() {
-        if (!this.state.recording) {
-            console.log('Can\'t pause, not recording!');
-            return;
-        }
-
-        try {
-            const filePath = await AudioRecorder.pauseRecording();
-            this.setState({ paused: true });
-        } catch (error) {
-            console.error(error);
-        }
-    }
-
-    async _resume() {
-        if (!this.state.paused) {
-            console.log('Can\'t resume, not paused!');
-            return;
-        }
-
-        try {
-            await AudioRecorder.resumeRecording();
-            this.setState({ paused: false });
-        } catch (error) {
-            console.error(error);
-        }
-    }
-
-    async _stop() {
-        if (!this.state.recording) {
-            console.log('Can\'t stop, not recording!');
-            return;
-        }
-
-        this.setState({ stoppedRecording: true, recording: false, paused: false });
-
-        try {
-            const filePath = await AudioRecorder.stopRecording();
-
-            if(Platform.OS === 'android'){
-                this._finishRecording(true, filePath);
-            }
-
-            if(!this.state.doneFirstRec){
-                this.setState({ currentTime: 0, doneFirstRec: true });
-            }
-
-            return filePath;
-        } catch (error) {
-            console.error(error);
-        }
-    }
-
-    async _play() {
-        if (this.state.recording) {
-            await this._stop();
-        }
-
-        // These timeouts are a hacky workaround for some issues with react-native-sound.
-        // See https://github.com/zmxv/react-native-sound/issues/89.
-        setTimeout(() => {
-            var sound = new Sound(this.state.audioPath, '', (error) => {
-                if (error) {
-                    console.log('failed to load the sound', error);
-                }
-            });
-
-            setTimeout(() => {
-                sound.play((success) => {
-                    if (success) {
-                        console.log('successfully finished playing');
-                    } else {
-                        console.log('playback failed due to audio decoding errors');
-                    }
-                });
-            }, 100);
-        }, 100);
-    }
-
-    async _record() {
-        if (this.state.recording) {
-            console.log('Already recording!');
-            return;
-        }
-
-        if (!this.state.hasPermission) {
-            console.log('Can not record, no permission granted!');
-            return;
-        }
-
-        if (this.state.stoppedRecording) {
-            this.prepareRecordingPath(this.state.audioPath);
-        }
-
-        this.setState({ recording: true, paused: false });
-
-        try {
-            const filePath = await AudioRecorder.startRecording();
-        } catch (error) {
-            console.error(error);
-        }
-    }
-
-    _finishRecording(didSucceed, filePath, fileSize) {
-        this.setState({ finished: didSucceed });
-        console.log(`Finished recording of duration ${this.state.currentTime} seconds at path: ${filePath} and size of ${fileSize || 0} bytes`);
-    }
-
     _leave = () => {
-        leave();
+        socket.disconnect()
         this.props.navigation.goBack()
-    }
-
-    renderControls = () => {
-        return (<View style={styles.controls}>
-            {thePC ? this._renderButton("LEAVE", () => { this._leave() }) : null}
-
-            {this._renderButton("RECORD", () => { this._record() }, this.state.recording)}
-            {this._renderButton("PLAY", () => { this._play() })}
-            {this._renderButton("STOP", () => { this._stop() })}
-            {/* {this._renderButton("PAUSE", () => {this._pause()} )} */}
-            {this._renderPauseButton(() => { this.state.paused ? this._resume() : this._pause() })}
-            <Text style={styles.progressText}>{this.state.currentTime}s</Text>
-        </View>);
     }
 
     render() {
@@ -522,7 +327,9 @@ export default class Broadcast extends Component<Props> {
             <View style={styles.container}>
                 <Text style={styles.welcome}>{isBroadcaster ? 'Broadcasting on' : 'Listening to'}: {this.state.roomID}</Text>
 
-                {!isBroadcaster && this.state.doneFirstRec ? this.renderControls() : null}
+                <TouchableHighlight style={styles.button} onPress={this._leave}>
+                    <Text style={styles.buttonText}>Leave Broadcast</Text>
+                </TouchableHighlight>
 
                 <RTCView streamURL={this.state.videoURL} />
             </View>
@@ -531,16 +338,9 @@ export default class Broadcast extends Component<Props> {
 }
 
 const styles = StyleSheet.create({
-    selfView: {
-        width: 200,
-        height: 150,
-    },
-    remoteView: {
-        width: 200,
-        height: 150,
-    },
     container: {
         flex: 1,
+        alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#2b608a',
     },
@@ -550,32 +350,13 @@ const styles = StyleSheet.create({
         margin: 10,
         color: '#fff',
     },
-    listViewContainer: {
-        height: 150,
-    },
 
-    controls: {
-        justifyContent: 'center',
-        alignItems: 'center',
-        flex: 1,
-    },
-    progressText: {
-        paddingTop: 50,
-        fontSize: 50,
-        color: "#fff"
-    },
     button: {
         padding: 20
     },
-    disabledButtonText: {
-        color: '#eee'
-    },
     buttonText: {
         fontSize: 20,
-        color: "#fff"
+        color: "#B81F00",
+        textAlign: 'center',
     },
-    activeButtonText: {
-        fontSize: 20,
-        color: "#B81F00"
-    }
 });
