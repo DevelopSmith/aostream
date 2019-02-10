@@ -181,8 +181,10 @@ function mute(socketId) {
 
 function leave(socketId) {
     console.log('leave', socketId);
+}
 
-    /* const pc = pcPeers[socketId];
+function disconnect(socketId){
+    const pc = pcPeers[socketId];
     const viewIndex = pc.viewIndex;
     pc.close();
     delete pcPeers[socketId];
@@ -190,7 +192,7 @@ function leave(socketId) {
     const remoteList = container.state.remoteList;
     delete remoteList[socketId]
     container.setState({ remoteList: remoteList });
-    container.setState({ info: 'One peer leave!' }); */
+    container.setState({ info: 'One peer leave!' });
 }
 
 function logError(error) {
@@ -233,13 +235,16 @@ export default class Broadcast extends Component<Props> {
         const roomID = this.props.navigation.getParam('roomID', null);
         isBroadcaster = this.props.navigation.getParam('broadcaster', true);
 
-        socket = io.connect('https://aostream-webrtc-server.herokuapp.com', { transports: ['websocket'] });
+        socket = io.connect('https://broadcastme.wolodeploy.com', { transports: ['websocket'] });
 
         socket.on('exchange', function (data) {
             exchange(data);
         });
         socket.on('leave', function (socketId) {
             leave(socketId);
+        });
+        socket.on('disconnect', function (socketId) {
+            disconnect(socketId);
         });
         
         socket.on('connect', function (data) {
@@ -270,8 +275,6 @@ export default class Broadcast extends Component<Props> {
                 <TouchableHighlight style={styles.button} onPress={this._leave}>
                     <Text style={styles.buttonText}>Leave Broadcast</Text>
                 </TouchableHighlight>
-
-                <RTCView streamURL={this.state.videoURL} />
             </View>
         );
     }
