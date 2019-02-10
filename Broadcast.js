@@ -11,6 +11,7 @@ const pcPeers = {};
 let localStream;
 let isBroadcaster = true;
 let thePC = null;
+let mySocketId = null;
 
 function getLocalStream(isFront, callback) {
     let videoSourceId;
@@ -183,16 +184,19 @@ function leave(socketId) {
     console.log('leave', socketId);
 }
 
-function disconnect(socketId){
-    const pc = pcPeers[socketId];
-    const viewIndex = pc.viewIndex;
-    pc.close();
-    delete pcPeers[socketId];
+function disconnect(){
+    for(let peer in pcPeers){
+        const pc = pcPeers[peer];
+        const viewIndex = pc.viewIndex;
+        pc.close();
+        delete pcPeers[peer];
 
-    const remoteList = container.state.remoteList;
-    delete remoteList[socketId]
-    container.setState({ remoteList: remoteList });
-    container.setState({ info: 'One peer leave!' });
+        const remoteList = container.state.remoteList;
+        delete remoteList[peer]
+        container.setState({ remoteList: remoteList });
+        container.setState({ info: 'One peer leave!' });
+    }
+
 }
 
 function logError(error) {
@@ -237,6 +241,10 @@ export default class Broadcast extends Component<Props> {
 
         socket = io.connect('https://broadcastme.wolodeploy.com', { transports: ['websocket'] });
 
+        socket.on('connect', function (data) {
+            mySocketId = socket.id;
+        });
+
         socket.on('exchange', function (data) {
             exchange(data);
         });
@@ -244,7 +252,7 @@ export default class Broadcast extends Component<Props> {
             leave(socketId);
         });
         socket.on('disconnect', function (socketId) {
-            disconnect(socketId);
+            disconnect();
         });
         
         socket.on('connect', function (data) {
